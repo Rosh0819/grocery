@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="theme-color" content="#ffffff"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="Grocery"/>
+<title>Grocery Manager</title>
+
+<!-- ── PWA manifest inline ── -->
+<script>
+const MANIFEST = {
+  name: "Grocery Manager",
+  short_name: "Grocery",
+  start_url: "./",
+  display: "standalone",
+  background_color: "#ffffff",
+  theme_color: "#ffffff",
+  icons: [{ src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%231D9E75'/%3E%3Ctext y='.9em' font-size='80' x='10'%3E%F0%9F%9B%92%3C/text%3E%3C/svg%3E", sizes: "192x192", type: "image/svg+xml" }]
+};
+const blob = new Blob([JSON.stringify(MANIFEST)], {type:'application/json'});
+const link = document.createElement('link');
+link.rel = 'manifest'; link.href = URL.createObjectURL(blob);
+document.head.appendChild(link);
+</script>
+
+<style>
+:root {
+  --green: #1D9E75; --green-light: #E1F5EE; --green-dark: #085041;
+  --amber: #BA7517; --amber-light: #FAEEDA;
+  --red: #E24B4A;   --red-light: #FCEBEB;
+  --blue: #185FA5;  --blue-light: #E6F1FB;
+  --text: #1a1a1a;  --text2: #6b6b6b; --text3: #a0a0a0;
+  --bg: #ffffff;    --bg2: #f5f5f3;   --border: rgba(0,0,0,0.12);
+  --radius: 10px;   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #e8e8e6; --text2: #a0a09a; --text3: #6a6a66;
+    --bg: #1c1c1e;   --bg2: #2c2c2e;   --border: rgba(255,255,255,0.12);
+    --green-light: #0a3325; --amber-light: #3a2500; --red-light: #3a0f0f; --blue-light: #0a1f38;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); max-width: 480px; margin: 0 auto; min-height: 100dvh; }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; border-bottom: 0.5px solid var(--border); background: var(--bg); position: sticky; top: 0; z-index: 10; }
+.topbar h1 { font-size: 18px; font-weight: 600; }
+.sync-btn { font-size: 13px; padding: 6px 12px; border-radius: 20px; border: 0.5px solid var(--border); background: var(--bg2); color: var(--text); cursor: pointer; }
+.sync-btn.syncing { color: var(--green); border-color: var(--green); }
+.tabs { display: flex; padding: 10px 16px; gap: 8px; overflow-x: auto; scrollbar-width: none; border-bottom: 0.5px solid var(--border); background: var(--bg); position: sticky; top: 57px; z-index: 9; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { flex-shrink: 0; padding: 7px 16px; border-radius: 20px; border: 0.5px solid var(--border); background: var(--bg); color: var(--text2); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+.tab.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+.page { display: none; padding: 16px; }
+.page.on { display: block; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.stat { background: var(--bg2); border-radius: var(--radius); padding: 12px 14px; }
+.stat-l { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+.stat-v { font-size: 24px; font-weight: 600; }
+.card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius); margin-bottom: 10px; overflow: hidden; }
+.card-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; }
+.card-row:not(:last-child) { border-bottom: 0.5px solid var(--border); }
+.item-name { font-size: 14px; font-weight: 500; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-cat { font-size: 11px; color: var(--text3); }
+.badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+.b-ok  { background: var(--green-light); color: var(--green-dark); }
+.b-low { background: var(--amber-light); color: var(--amber); }
+.b-out { background: var(--red-light);   color: var(--red); }
+.b-blue{ background: var(--blue-light);  color: var(--blue); }
+.qty-ctrl { display: flex; align-items: center; gap: 8px; }
+.qb { width: 28px; height: 28px; border-radius: 50%; border: 0.5px solid var(--border); background: var(--bg2); color: var(--text); font-size: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; }
+.qb:active { transform: scale(0.9); }
+.qv { font-size: 15px; font-weight: 600; min-width: 32px; text-align: center; }
+.bar-wrap { height: 5px; background: var(--bg2); border-radius: 3px; width: 60px; overflow: hidden; }
+.bar { height: 5px; border-radius: 3px; }
+.section-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.section-hd h2 { font-size: 15px; font-weight: 600; }
+.chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.chip { padding: 5px 12px; border-radius: 20px; border: 0.5px solid var(--border); background: var(--bg); color: var(--text2); font-size: 12px; font-weight: 500; cursor: pointer; }
+.chip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+.btn { padding: 10px 18px; border-radius: var(--radius); border: 0.5px solid var(--border); background: var(--bg2); color: var(--text); font-size: 14px; font-weight: 500; cursor: pointer; }
+.btn-primary { background: var(--green); color: #fff; border-color: var(--green); }
+.btn:active { opacity: 0.75; }
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 6px; font-weight: 500; }
+.form-group select, .form-group input { width: 100%; padding: 11px 13px; border-radius: var(--radius); border: 0.5px solid var(--border); background: var(--bg2); color: var(--text); font-size: 15px; font-family: var(--font); -webkit-appearance: none; }
+.form-row { display: flex; gap: 10px; }
+.form-row .form-group { flex: 1; }
+.log-item { display: flex; flex-direction: column; gap: 3px; padding: 11px 14px; border-bottom: 0.5px solid var(--border); }
+.log-item:last-child { border-bottom: none; }
+.log-top { display: flex; align-items: center; gap: 8px; }
+.log-name { font-size: 13px; font-weight: 500; flex: 1; }
+.log-meta { font-size: 12px; color: var(--text2); }
+.log-add { color: var(--green); font-weight: 600; font-size: 13px; }
+.log-set { color: var(--blue); font-weight: 600; font-size: 13px; }
+.log-use { color: var(--amber); font-weight: 600; font-size: 13px; }
+.empty { text-align: center; color: var(--text3); font-size: 14px; padding: 32px 0; }
+.setup-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 0.5px solid var(--border); }
+.setup-row:last-child { border-bottom: none; }
+.setup-info { flex: 1; min-width: 0; }
+.setup-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.setup-sub { font-size: 11px; color: var(--text2); }
+.setup-buf { width: 64px; padding: 7px 8px; border-radius: 8px; border: 0.5px solid var(--border); background: var(--bg2); color: var(--text); font-size: 14px; text-align: center; font-family: var(--font); }
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 13px; font-weight: 500; z-index: 999; opacity: 0; transition: opacity 0.2s; pointer-events: none; white-space: nowrap; }
+.toast.show { opacity: 1; }
+.url-setup { background: var(--bg2); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+.url-setup p { font-size: 13px; color: var(--text2); margin-bottom: 10px; line-height: 1.5; }
+.url-setup input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 0.5px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; font-family: var(--font); margin-bottom: 10px; }
+.divider { height: 0.5px; background: var(--border); margin: 16px 0; }
+.shop-total { display: flex; justify-content: space-between; align-items: center; padding: 14px; background: var(--bg2); border-radius: var(--radius); margin-top: 12px; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Grocery Manager</h1>
+  <button class="sync-btn" id="sync-btn" onclick="syncNow()">Sync</button>
+</div>
+
+<div class="tabs">
+  <button class="tab on" onclick="goTab('stock',this)">Stock</button>
+  <button class="tab" onclick="goTab('shopping',this)">Shopping</button>
+  <button class="tab" onclick="goTab('log',this)">Update</button>
+  <button class="tab" onclick="goTab('setup',this)">Setup</button>
+</div>
+
+<!-- ── STOCK ── -->
+<div id="stock" class="page on">
+  <div class="stats">
+    <div class="stat"><div class="stat-l">Total items</div><div class="stat-v" id="s-total">—</div></div>
+    <div class="stat"><div class="stat-l">Low / Out</div><div class="stat-v" id="s-lowout" style="color:var(--amber)">—</div></div>
+    <div class="stat"><div class="stat-l">Need to buy</div><div class="stat-v" id="s-need" style="color:var(--blue)">—</div></div>
+    <div class="stat"><div class="stat-l">Est. monthly</div><div class="stat-v" id="s-cost" style="font-size:16px">—</div></div>
+  </div>
+  <div class="chip-row" id="cat-chips"></div>
+  <div id="stock-list"></div>
+</div>
+
+<!-- ── SHOPPING ── -->
+<div id="shopping" class="page">
+  <div class="section-hd">
+    <h2>Shopping list</h2>
+    <button class="btn" onclick="genShopping()">Refresh</button>
+  </div>
+  <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Items below buffer — buy to reach 1 month + buffer.</p>
+  <div id="shop-list"></div>
+  <div class="shop-total" id="shop-total" style="display:none">
+    <span>Estimated total</span>
+    <span id="shop-total-val"></span>
+  </div>
+</div>
+
+<!-- ── UPDATE / LOG ── -->
+<div id="log" class="page">
+  <h2 style="font-size:15px;font-weight:600;margin-bottom:14px;">Update stock</h2>
+  <div class="form-group">
+    <label>Item</label>
+    <select id="log-item"></select>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Action</label>
+      <select id="log-type">
+        <option value="set">Set exact qty</option>
+        <option value="add">Purchase (+)</option>
+        <option value="use">Usage / waste (−)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Quantity</label>
+      <input id="log-qty" type="number" min="0" step="0.5" placeholder="0"/>
+    </div>
+  </div>
+  <button class="btn btn-primary" style="width:100%;margin-bottom:20px;" onclick="doLog()">Save update</button>
+
+  <div class="section-hd"><h2 style="font-size:15px;font-weight:600;">Recent updates</h2></div>
+  <div class="card" id="log-list"></div>
+</div>
+
+<!-- ── SETUP ── -->
+<div id="setup" class="page">
+  <h2 style="font-size:15px;font-weight:600;margin-bottom:6px;">Google Sheets connection</h2>
+  <div class="url-setup">
+    <p>Paste your Apps Script Web App URL below. Both phones need the same URL — save it once here and it's stored on this device.</p>
+    <input id="api-url" type="url" placeholder="https://script.google.com/macros/s/.../exec" value=""/>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" style="flex:1;" onclick="saveUrl()">Save & connect</button>
+      <button class="btn" onclick="initSheet()">First-time setup</button>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="section-hd">
+    <h2 style="font-size:15px;font-weight:600;">Buffer limits</h2>
+    <span style="font-size:12px;color:var(--text2);">Min stock to keep</span>
+  </div>
+  <div class="card" id="setup-list"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Item catalogue (from your xlsx) ─────────────────────────
+const CATALOGUE = [
+  {name:"White Raw Rice",category:"Grains & Pulses",frequency:"Monthly",monthly:3,unit:"Kg",price:210},
+  {name:"Nadu Rice",category:"Grains & Pulses",frequency:"Monthly",monthly:10,unit:"Kg",price:220},
+  {name:"Basmati Rice",category:"Grains & Pulses",frequency:"Monthly",monthly:2,unit:"Kg",price:650},
+  {name:"Red Dhal (Parippu)",category:"Grains & Pulses",frequency:"Monthly",monthly:3,unit:"Kg",price:295},
+  {name:"Chickpeas (Kadala)",category:"Grains & Pulses",frequency:"Monthly",monthly:1,unit:"Kg",price:550},
+  {name:"Green Gram (Mung)",category:"Grains & Pulses",frequency:"Monthly",monthly:1,unit:"Kg",price:900},
+  {name:"Wheat Flour",category:"Grains & Pulses",frequency:"Monthly",monthly:5,unit:"Kg",price:240},
+  {name:"White Oats",category:"Grains & Pulses",frequency:"Monthly",monthly:2,unit:"Kg",price:1300},
+  {name:"Pasta (Elbow/Shell)",category:"Grains & Pulses",frequency:"Monthly",monthly:2,unit:"Kg",price:580},
+  {name:"Macaroni",category:"Grains & Pulses",frequency:"Monthly",monthly:1,unit:"Kg",price:550},
+  {name:"Milk Powder (400g)",category:"Dairy & Breakfast",frequency:"Monthly",monthly:5,unit:"Packs",price:1150},
+  {name:"Fresh Milk (1L Tetra)",category:"Dairy & Breakfast",frequency:"Weekly",monthly:8,unit:"Packs",price:550},
+  {name:"Tea Leaves (400g)",category:"Dairy & Breakfast",frequency:"Monthly",monthly:1,unit:"Packs",price:950},
+  {name:"White Sugar",category:"Dairy & Breakfast",frequency:"Monthly",monthly:5,unit:"Kg",price:275},
+  {name:"Butter (200g)",category:"Dairy & Breakfast",frequency:"Monthly",monthly:3,unit:"Packs",price:850},
+  {name:"Fruit Jam (500g)",category:"Dairy & Breakfast",frequency:"Monthly",monthly:1,unit:"Jar",price:750},
+  {name:"Chocolate Spread",category:"Dairy & Breakfast",frequency:"Monthly",monthly:1,unit:"Jar",price:1200},
+  {name:"Eggs (Pack of 10)",category:"Proteins",frequency:"Weekly",monthly:32,unit:"Packs",price:380},
+  {name:"Chicken (Whole)",category:"Proteins",frequency:"Weekly",monthly:60,unit:"Kg",price:1350},
+  {name:"Fresh Fish (Thalapath)",category:"Proteins",frequency:"Weekly",monthly:16,unit:"Kg",price:2200},
+  {name:"Canned Fish (Large)",category:"Proteins",frequency:"Monthly",monthly:4,unit:"Cans",price:620},
+  {name:"Sprats (Dried - 250g)",category:"Proteins",frequency:"Monthly",monthly:2,unit:"Packs",price:650},
+  {name:"Potatoes",category:"Vegetables",frequency:"Weekly",monthly:24,unit:"Kg",price:350},
+  {name:"Big Onions",category:"Vegetables",frequency:"Weekly",monthly:20,unit:"Kg",price:320},
+  {name:"Red Onions",category:"Vegetables",frequency:"Weekly",monthly:8,unit:"Kg",price:480},
+  {name:"Garlic",category:"Vegetables",frequency:"Monthly",monthly:1,unit:"Kg",price:950},
+  {name:"Ginger (100g)",category:"Vegetables",frequency:"Weekly",monthly:16,unit:"Packs",price:250},
+  {name:"Green Chillies",category:"Vegetables",frequency:"Weekly",monthly:4,unit:"Kg",price:800},
+  {name:"Pumpkin",category:"Vegetables",frequency:"Weekly",monthly:8,unit:"Kg",price:180},
+  {name:"Carrots",category:"Vegetables",frequency:"Weekly",monthly:8,unit:"Kg",price:450},
+  {name:"Beans",category:"Vegetables",frequency:"Weekly",monthly:8,unit:"Kg",price:400},
+  {name:"Leeks",category:"Vegetables",frequency:"Weekly",monthly:4,unit:"Kg",price:380},
+  {name:"Brinjals",category:"Vegetables",frequency:"Weekly",monthly:8,unit:"Kg",price:350},
+  {name:"Tomatoes",category:"Vegetables",frequency:"Weekly",monthly:8,unit:"Kg",price:400},
+  {name:"Coconut Oil (2L)",category:"Condiments",frequency:"Monthly",monthly:2,unit:"Bottles",price:1250},
+  {name:"Coconut Milk Powder (300g)",category:"Condiments",frequency:"Monthly",monthly:5,unit:"Packs",price:850},
+  {name:"Chilli Powder (250g)",category:"Condiments",frequency:"Monthly",monthly:2,unit:"Packs",price:800},
+  {name:"Chilli Pieces (250g)",category:"Condiments",frequency:"Monthly",monthly:2,unit:"Packs",price:750},
+  {name:"Roasted Curry Powder",category:"Condiments",frequency:"Monthly",monthly:1,unit:"Pack",price:600},
+  {name:"Unroasted Curry Powder",category:"Condiments",frequency:"Monthly",monthly:1,unit:"Pack",price:550},
+  {name:"Turmeric Powder (100g)",category:"Condiments",frequency:"Monthly",monthly:1,unit:"Pack",price:450},
+  {name:"Table Salt",category:"Condiments",frequency:"Monthly",monthly:2,unit:"Packs",price:140},
+  {name:"Coconut Vinegar",category:"Condiments",frequency:"Monthly",monthly:1,unit:"Bottle",price:280},
+  {name:"Cream Biscuits",category:"Kids & School",frequency:"Weekly",monthly:32,unit:"Packs",price:220},
+  {name:"Marie Biscuits",category:"Kids & School",frequency:"Weekly",monthly:32,unit:"Packs",price:120},
+  {name:"Fruit Juice Tetras",category:"Kids & School",frequency:"Weekly",monthly:80,unit:"Packs",price:125},
+  {name:"Cheese Wedges",category:"Kids & School",frequency:"Weekly",monthly:16,unit:"Packs",price:950},
+  {name:"Fruit Snacks/Gelly",category:"Kids & School",frequency:"Weekly",monthly:16,unit:"Packs",price:450},
+  {name:"Washing Powder (1kg)",category:"Household",frequency:"Monthly",monthly:3,unit:"Packs",price:650},
+  {name:"Laundry Soap Bars",category:"Household",frequency:"Monthly",monthly:6,unit:"Bars",price:180},
+  {name:"Dishwash Liquid (500ml)",category:"Household",frequency:"Monthly",monthly:2,unit:"Bottles",price:550},
+  {name:"Toilet Soap (Pack of 4)",category:"Household",frequency:"Monthly",monthly:3,unit:"Packs",price:650},
+  {name:"Hand Wash Refill",category:"Household",frequency:"Monthly",monthly:2,unit:"Packs",price:450},
+  {name:"Toilet Cleaner (750ml)",category:"Household",frequency:"Monthly",monthly:1,unit:"Bottle",price:850},
+  {name:"Toilet Paper (4 pack)",category:"Household",frequency:"Monthly",monthly:3,unit:"Packs",price:650},
+  {name:"Garbage Bags (Large)",category:"Household",frequency:"Monthly",monthly:2,unit:"Packs",price:450}
+];
+
+// ── State ────────────────────────────────────────────────────
+let items = CATALOGUE.map(c => ({
+  ...c, stock: c.monthly, buffer: Math.ceil(c.monthly * 0.25), lastUpdated: ''
+}));
+let logs       = [];
+let catFilter  = 'All';
+let apiUrl     = localStorage.getItem('grocery_api_url') || '';
+let syncing    = false;
+
+// ── Boot ─────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('api-url').value = apiUrl;
+  const saved = localStorage.getItem('grocery_items');
+  if (saved) { try { items = JSON.parse(saved); } catch(e) {} }
+  const savedLog = localStorage.getItem('grocery_log');
+  if (savedLog) { try { logs = JSON.parse(savedLog); } catch(e) {} }
+  renderAll();
+  if (apiUrl) syncNow();
+  registerSW();
+});
+
+// ── Tab navigation ───────────────────────────────────────────
+function goTab(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  btn.classList.add('on');
+  if (id === 'shopping') genShopping();
+  if (id === 'log')      renderLog();
+  if (id === 'setup')    renderSetup();
+}
+
+// ── Helpers ──────────────────────────────────────────────────
+function needToBuy(item) {
+  return Math.max(0, Math.round((item.monthly + item.buffer - item.stock) * 10) / 10);
+}
+function status(item) {
+  if (item.stock === 0) return { label:'Out', cls:'b-out' };
+  if (item.stock <= item.buffer) return { label:'Low', cls:'b-low' };
+  return { label:'OK', cls:'b-ok' };
+}
+function cov(item) {
+  if (!item.monthly) return 100;
+  return Math.min(100, Math.round((item.stock / item.monthly) * 100));
+}
+function barColor(pct) {
+  if (pct >= 100) return '#1D9E75';
+  if (pct >= 50)  return '#BA7517';
+  return '#E24B4A';
+}
+function fmt(n) { return n.toLocaleString('en-LK'); }
+function toast(msg, dur = 2200) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+function saveLocal() {
+  localStorage.setItem('grocery_items', JSON.stringify(items));
+  localStorage.setItem('grocery_log',   JSON.stringify(logs.slice(-200)));
+}
+
+// ── Render: Stock ────────────────────────────────────────────
+function renderAll() {
+  renderCats();
+  renderStock();
+}
+
+function renderCats() {
+  const cats = ['All', ...new Set(items.map(i => i.category))];
+  document.getElementById('cat-chips').innerHTML = cats.map(c =>
+    `<button class="chip${c === catFilter ? ' on' : ''}" onclick="setCat('${c}',this)">${c}</button>`
+  ).join('');
+}
+
+function setCat(cat, el) {
+  catFilter = cat;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+  el.classList.add('on');
+  renderStock();
+}
+
+function renderStock() {
+  const filtered = catFilter === 'All' ? items : items.filter(i => i.category === catFilter);
+  const low  = items.filter(i => i.stock > 0 && i.stock <= i.buffer).length;
+  const out  = items.filter(i => i.stock === 0).length;
+  const need = items.filter(i => needToBuy(i) > 0).length;
+  const monthly = items.reduce((s, i) => s + i.monthly * i.price, 0);
+  document.getElementById('s-total').textContent  = items.length;
+  document.getElementById('s-lowout').textContent = `${low} / ${out}`;
+  document.getElementById('s-need').textContent   = need;
+  document.getElementById('s-cost').textContent   = 'LKR ' + fmt(Math.round(monthly));
+
+  if (!filtered.length) {
+    document.getElementById('stock-list').innerHTML = '<div class="empty">No items</div>';
+    return;
+  }
+
+  document.getElementById('stock-list').innerHTML = filtered.map(item => {
+    const s = status(item);
+    const p = cov(item);
+    return `<div class="card">
+      <div class="card-row">
+        <div style="flex:1;min-width:0;">
+          <div class="item-name">${item.name}</div>
+          <div class="item-cat">${item.category} · ${item.frequency}</div>
+        </div>
+        <span class="badge ${s.cls}">${s.label}</span>
+      </div>
+      <div class="card-row">
+        <div style="flex:1;font-size:12px;color:var(--text2);">Monthly: ${item.monthly} ${item.unit}</div>
+        <div class="qty-ctrl">
+          <div class="qb" onclick="adj('${item.name}',-1)">−</div>
+          <div class="qv">${item.stock}</div>
+          <div class="qb" onclick="adj('${item.name}',1)">+</div>
+        </div>
+        <div style="margin-left:10px;">
+          <div class="bar-wrap"><div class="bar" style="width:${p}%;background:${barColor(p)};"></div></div>
+          <div style="font-size:11px;color:var(--text2);text-align:center;margin-top:2px;">${p}%</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function adj(name, delta) {
+  const item = items.find(i => i.name === name);
+  if (!item) return;
+  const before = item.stock;
+  item.stock = Math.max(0, Math.round((item.stock + delta) * 10) / 10);
+  saveLocal();
+  renderStock();
+  if (apiUrl) pushStockUpdate(item, 'set', item.stock, before);
+}
+
+// ── Render: Shopping ─────────────────────────────────────────
+function genShopping() {
+  const need = items.filter(i => needToBuy(i) > 0);
+  const list = document.getElementById('shop-list');
+  const tot  = document.getElementById('shop-total');
+  const totV = document.getElementById('shop-total-val');
+  if (!need.length) {
+    list.innerHTML = '<div class="empty">All items are above buffer — nothing to buy!</div>';
+    tot.style.display = 'none'; return;
+  }
+  let total = 0;
+  list.innerHTML = need.map(item => {
+    const qty = needToBuy(item);
+    const cost = Math.round(qty * item.price);
+    total += cost;
+    return `<div class="card" style="margin-bottom:8px;">
+      <div class="card-row">
+        <div style="flex:1;min-width:0;">
+          <div class="item-name">${item.name}</div>
+          <div class="item-cat">${item.category}</div>
+        </div>
+        <span class="badge b-blue">Buy ${qty} ${item.unit}</span>
+      </div>
+      <div class="card-row" style="justify-content:space-between;">
+        <span style="font-size:12px;color:var(--text2);">In stock: ${item.stock} · Buffer: ${item.buffer}</span>
+        <span style="font-size:13px;font-weight:600;">LKR ${fmt(cost)}</span>
+      </div>
+    </div>`;
+  }).join('');
+  tot.style.display = 'flex';
+  totV.textContent = 'LKR ' + fmt(total);
+}
+
+// ── Render: Update log ───────────────────────────────────────
+function renderLog() {
+  const sel = document.getElementById('log-item');
+  sel.innerHTML = items.map(i => `<option value="${i.name}">${i.name} (${i.stock} ${i.unit})</option>`).join('');
+  const list = document.getElementById('log-list');
+  if (!logs.length) { list.innerHTML = '<div class="empty">No updates yet</div>'; return; }
+  list.innerHTML = [...logs].reverse().slice(0, 30).map(l => {
+    const cls  = l.type === 'add' ? 'log-add' : l.type === 'use' ? 'log-use' : 'log-set';
+    const sign = l.type === 'add' ? '+' : l.type === 'use' ? '−' : '=';
+    const d    = new Date(l.ts);
+    const date = isNaN(d) ? '' : d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+    return `<div class="log-item">
+      <div class="log-top">
+        <span class="log-name">${l.name}</span>
+        <span class="${cls}">${sign}${l.qty} ${l.unit}</span>
+      </div>
+      <span class="log-meta">${date} · ${l.before} → ${l.after}</span>
+    </div>`;
+  }).join('');
+}
+
+function doLog() {
+  const name   = document.getElementById('log-item').value;
+  const type   = document.getElementById('log-type').value;
+  const qty    = parseFloat(document.getElementById('log-qty').value);
+  if (!name || isNaN(qty) || qty < 0) { toast('Enter a valid quantity'); return; }
+  const item   = items.find(i => i.name === name);
+  if (!item) return;
+  const before = item.stock;
+  if (type === 'set') item.stock = qty;
+  else if (type === 'add') item.stock = Math.round((item.stock + qty) * 10) / 10;
+  else item.stock = Math.max(0, Math.round((item.stock - qty) * 10) / 10);
+  const entry = { ts: new Date().toISOString(), name, type, qty, before, after: item.stock, unit: item.unit };
+  logs.push(entry);
+  saveLocal();
+  document.getElementById('log-qty').value = '';
+  renderLog();
+  renderStock();
+  toast('Stock updated');
+  if (apiUrl) {
+    pushStockUpdate(item, type, qty, before);
+    pushLog(entry);
+  }
+}
+
+// ── Render: Setup ────────────────────────────────────────────
+function renderSetup() {
+  document.getElementById('setup-list').innerHTML = items.map(item =>
+    `<div class="setup-row">
+      <div class="setup-info">
+        <div class="setup-name">${item.name}</div>
+        <div class="setup-sub">${item.monthly} ${item.unit}/month · LKR ${fmt(item.price)}</div>
+      </div>
+      <input class="setup-buf" type="number" min="0" step="0.5" value="${item.buffer}"
+        onchange="setBuffer('${item.name}',this.value)"
+        onfocus="this.select()"/>
+    </div>`
+  ).join('');
+}
+
+function setBuffer(name, val) {
+  const item = items.find(i => i.name === name);
+  if (!item) return;
+  item.buffer = Math.max(0, parseFloat(val) || 0);
+  saveLocal();
+  if (apiUrl) fetch(apiUrl, { method:'POST', body: JSON.stringify({ action:'saveBuffer', name, buffer: item.buffer, stock: item.stock }) }).catch(()=>{});
+}
+
+// ── URL / Sheet setup ────────────────────────────────────────
+function saveUrl() {
+  apiUrl = document.getElementById('api-url').value.trim();
+  localStorage.setItem('grocery_api_url', apiUrl);
+  toast('Saved! Syncing…');
+  syncNow();
+}
+
+function initSheet() {
+  if (!apiUrl) { toast('Save the URL first'); return; }
+  toast('Initialising sheet…', 4000);
+  fetch(apiUrl, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'initItems', items: CATALOGUE })
+  })
+  .then(r => r.json())
+  .then(d => { toast(d.status === 'initialised' ? `Sheet ready — ${d.count} items written` : 'Error: ' + d.error, 3000); })
+  .catch(() => toast('Could not reach the sheet', 3000));
+}
+
+// ── Sync ─────────────────────────────────────────────────────
+async function syncNow() {
+  if (!apiUrl || syncing) return;
+  syncing = true;
+  const btn = document.getElementById('sync-btn');
+  btn.textContent = 'Syncing…'; btn.classList.add('syncing');
+  try {
+    const r = await fetch(`${apiUrl}?action=getAll`);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    // Merge remote stock into local items
+    d.items.forEach(remote => {
+      const local = items.find(i => i.name === remote.name);
+      if (local) {
+        local.stock  = Number(remote.stock);
+        local.buffer = Number(remote.buffer);
+        local.lastUpdated = remote.lastUpdated;
+      }
+    });
+    if (d.log && d.log.length) {
+      logs = d.log.map(l => ({
+        ts: l.timestamp, name: l.name, type: l.type,
+        qty: l.qty, before: l.before, after: l.after, unit: l.unit
+      }));
+    }
+    saveLocal();
+    renderAll();
+    btn.textContent = 'Synced ✓';
+    setTimeout(() => { btn.textContent = 'Sync'; btn.classList.remove('syncing'); }, 2000);
+  } catch(e) {
+    btn.textContent = 'Offline'; btn.classList.remove('syncing');
+    setTimeout(() => { btn.textContent = 'Sync'; }, 3000);
+  }
+  syncing = false;
+}
+
+function pushStockUpdate(item, type, qty, before) {
+  fetch(apiUrl, {
+    method: 'POST',
+    body: JSON.stringify({ action:'updateStock', name: item.name, stock: item.stock, buffer: item.buffer })
+  }).catch(()=>{});
+}
+
+function pushLog(entry) {
+  fetch(apiUrl, {
+    method: 'POST',
+    body: JSON.stringify({ action:'logPurchase', ...entry })
+  }).catch(()=>{});
+}
+
+// ── Service Worker (offline support) ────────────────────────
+function registerSW() {
+  if ('serviceWorker' in navigator) {
+    const sw = `
+const CACHE='grocery-v1';
+const SHELL=['/'];
+self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL))));
+self.addEventListener('fetch',e=>{
+  if(e.request.url.includes('script.google.com'))return;
+  e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{
+    const c=res.clone();
+    caches.open(CACHE).then(ca=>ca.put(e.request,c));
+    return res;
+  })));
+});`;
+    const blob = new Blob([sw], { type: 'application/javascript' });
+    navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
+  }
+}
+</script>
+</body>
+</html>
