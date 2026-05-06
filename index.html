@@ -110,6 +110,19 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); max-
 .url-setup input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 0.5px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; font-family: var(--font); margin-bottom: 10px; }
 .divider { height: 0.5px; background: var(--border); margin: 16px 0; }
 .shop-total { display: flex; justify-content: space-between; align-items: center; padding: 14px; background: var(--bg2); border-radius: var(--radius); margin-top: 12px; font-weight: 600; }
+.shop-card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius); margin-bottom: 10px; overflow: hidden; transition: opacity 0.25s; }
+.shop-card.bought { opacity: 0.4; }
+.shop-card.bought .item-name { text-decoration: line-through; }
+.shop-cb-row { display: flex; align-items: center; gap: 12px; padding: 13px 14px; border-bottom: 0.5px solid var(--border); }
+.shop-cb { width: 22px; height: 22px; border-radius: 6px; border: 1.5px solid var(--border); background: var(--bg2); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; }
+.shop-cb.checked { background: var(--green); border-color: var(--green); }
+.shop-cb.checked::after { content: '✓'; color: #fff; font-size: 13px; font-weight: 700; }
+.suggest-item { padding: 11px 14px; font-size: 14px; cursor: pointer; border-bottom: 0.5px solid var(--border); color: var(--text); }
+.suggest-item:last-child { border-bottom: none; }
+.suggest-item:active { background: var(--bg2); }
+.suggest-item span { font-size: 12px; color: var(--text2); margin-left: 8px; }
+.progress-bar-wrap { height: 8px; background: var(--bg2); border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
+.progress-bar { height: 8px; background: var(--green); border-radius: 4px; transition: width 0.4s ease; }
 </style>
 </head>
 <body>
@@ -142,23 +155,35 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); max-
 <div id="shopping" class="page">
   <div class="section-hd">
     <h2>Shopping list</h2>
-    <button class="btn" onclick="genShopping()">Refresh</button>
+    <div style="display:flex;gap:8px;">
+      <button class="btn" onclick="clearBought()" id="clear-bought-btn" style="display:none;">Clear bought</button>
+      <button class="btn" onclick="genShopping()">Refresh</button>
+    </div>
   </div>
-  <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Items below buffer — buy to reach 1 month + buffer.</p>
+  <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Tick an item when you buy it — stock updates automatically.</p>
   <div id="shop-list"></div>
-  <div class="shop-total" id="shop-total" style="display:none">
-    <span>Estimated total</span>
-    <span id="shop-total-val"></span>
-  </div>
+  <div id="shop-progress" style="display:none;margin-top:12px;"></div>
 </div>
 
 <!-- ── UPDATE / LOG ── -->
 <div id="log" class="page">
   <h2 style="font-size:15px;font-weight:600;margin-bottom:14px;">Update stock</h2>
-  <div class="form-group">
-    <label>Item</label>
-    <select id="log-item"></select>
+
+  <!-- Search field -->
+  <div class="form-group" style="position:relative;">
+    <label>Search item</label>
+    <input id="log-search" type="text" placeholder="Type to search…" autocomplete="off"
+      oninput="filterLogItems()" onfocus="showSuggestions()" style="width:100%;padding:11px 13px;border-radius:var(--radius);border:0.5px solid var(--border);background:var(--bg2);color:var(--text);font-size:15px;font-family:var(--font);" />
+    <div id="log-suggestions" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:20;background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>
   </div>
+
+  <!-- Current stock display -->
+  <div id="log-stock-display" style="display:none;background:var(--bg2);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">Current stock</div>
+    <div style="font-size:22px;font-weight:700;color:var(--green);" id="log-cur-stock">—</div>
+    <div style="font-size:12px;color:var(--text2);margin-top:2px;" id="log-cur-unit"></div>
+  </div>
+
   <div class="form-row">
     <div class="form-group">
       <label>Action</label>
@@ -173,6 +198,13 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); max-
       <input id="log-qty" type="number" min="0" step="0.5" placeholder="0"/>
     </div>
   </div>
+
+  <!-- Unit price -->
+  <div class="form-group">
+    <label>Unit price (LKR) <span style="font-weight:400;color:var(--text3);">— optional, updates catalogue</span></label>
+    <input id="log-price" type="number" min="0" step="1" placeholder="e.g. 350" style="width:100%;padding:11px 13px;border-radius:var(--radius);border:0.5px solid var(--border);background:var(--bg2);color:var(--text);font-size:15px;font-family:var(--font);" />
+  </div>
+
   <button class="btn btn-primary" style="width:100%;margin-bottom:20px;" onclick="doLog()">Save update</button>
 
   <div class="section-hd"><h2 style="font-size:15px;font-weight:600;">Recent updates</h2></div>
@@ -397,42 +429,97 @@ function adj(name, delta) {
 }
 
 // ── Render: Shopping ─────────────────────────────────────────
+let shopList = [];   // [{item, qty, bought}]
+
 function genShopping() {
-  const need = items.filter(i => needToBuy(i) > 0);
-  const list = document.getElementById('shop-list');
-  const tot  = document.getElementById('shop-total');
-  const totV = document.getElementById('shop-total-val');
-  if (!need.length) {
-    list.innerHTML = '<div class="empty">All items are above buffer — nothing to buy!</div>';
-    tot.style.display = 'none'; return;
+  shopList = items
+    .filter(i => needToBuy(i) > 0)
+    .map(i => ({ item: i, qty: needToBuy(i), bought: false }));
+  renderShopList();
+}
+
+function renderShopList() {
+  const list  = document.getElementById('shop-list');
+  const prog  = document.getElementById('shop-progress');
+  const clrBtn = document.getElementById('clear-bought-btn');
+
+  if (!shopList.length) {
+    list.innerHTML = '<div class="empty">All items are above buffer — nothing to buy! 🎉</div>';
+    prog.style.display = 'none';
+    clrBtn.style.display = 'none';
+    return;
   }
-  let total = 0;
-  list.innerHTML = need.map(item => {
-    const qty = needToBuy(item);
-    const cost = Math.round(qty * item.price);
-    total += cost;
-    return `<div class="card" style="margin-bottom:8px;">
-      <div class="card-row">
+
+  const boughtCount = shopList.filter(s => s.bought).length;
+  const pct = Math.round((boughtCount / shopList.length) * 100);
+  clrBtn.style.display = boughtCount > 0 ? '' : 'none';
+
+  prog.style.display = '';
+  prog.innerHTML = `
+    <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>
+    <div style="font-size:12px;color:var(--text2);text-align:right;">${boughtCount} of ${shopList.length} bought</div>`;
+
+  list.innerHTML = shopList.map((s, idx) => {
+    const bought = s.bought ? 'bought' : '';
+    const cbCls  = s.bought ? 'checked' : '';
+    return `<div class="shop-card ${bought}" id="scard-${idx}">
+      <div class="shop-cb-row">
+        <div class="shop-cb ${cbCls}" onclick="toggleBought(${idx})"></div>
         <div style="flex:1;min-width:0;">
-          <div class="item-name">${item.name}</div>
-          <div class="item-cat">${item.category}</div>
+          <div class="item-name">${s.item.name}</div>
+          <div class="item-cat">${s.item.category}</div>
         </div>
-        <span class="badge b-blue">Buy ${qty} ${item.unit}</span>
+        <span class="badge b-blue">${s.qty} ${s.item.unit}</span>
       </div>
-      <div class="card-row" style="justify-content:space-between;">
-        <span style="font-size:12px;color:var(--text2);">In stock: ${item.stock} · Buffer: ${item.buffer}</span>
-        <span style="font-size:13px;font-weight:600;">LKR ${fmt(cost)}</span>
+      <div style="padding:8px 14px 10px;font-size:12px;color:var(--text2);">
+        In stock: ${s.item.stock} · Buffer: ${s.item.buffer} · Monthly: ${s.item.monthly}
       </div>
     </div>`;
   }).join('');
-  tot.style.display = 'flex';
-  totV.textContent = 'LKR ' + fmt(total);
+}
+
+function toggleBought(idx) {
+  const s = shopList[idx];
+  s.bought = !s.bought;
+
+  if (s.bought) {
+    // Add the required qty to stock immediately
+    const item   = s.item;
+    const before = item.stock;
+    item.stock   = Math.round((item.stock + s.qty) * 10) / 10;
+    const entry  = { ts: new Date().toISOString(), name: item.name, type: 'add', qty: s.qty, before, after: item.stock, unit: item.unit };
+    logs.push(entry);
+    saveLocal();
+    if (apiUrl) { pushStockUpdate(item, 'add', s.qty, before); pushLog(entry); }
+    toast(`✓ ${item.name} — stock updated to ${item.stock} ${item.unit}`);
+  } else {
+    // Undo: subtract qty back
+    const item   = s.item;
+    const before = item.stock;
+    item.stock   = Math.max(0, Math.round((item.stock - s.qty) * 10) / 10);
+    saveLocal();
+    if (apiUrl) pushStockUpdate(item, 'set', item.stock, before);
+    toast(`Undone — ${item.name} back to ${item.stock} ${item.unit}`);
+  }
+  renderShopList();
+}
+
+function clearBought() {
+  shopList = shopList.filter(s => !s.bought);
+  renderShopList();
 }
 
 // ── Render: Update log ───────────────────────────────────────
+let selectedLogItem = null;
+
 function renderLog() {
-  const sel = document.getElementById('log-item');
-  sel.innerHTML = items.map(i => `<option value="${i.name}">${i.name} (${i.stock} ${i.unit})</option>`).join('');
+  // Reset search state
+  selectedLogItem = null;
+  document.getElementById('log-search').value = '';
+  document.getElementById('log-stock-display').style.display = 'none';
+  document.getElementById('log-suggestions').style.display = 'none';
+  document.getElementById('log-price').value = '';
+
   const list = document.getElementById('log-list');
   if (!logs.length) { list.innerHTML = '<div class="empty">No updates yet</div>'; return; }
   list.innerHTML = [...logs].reverse().slice(0, 30).map(l => {
@@ -440,34 +527,90 @@ function renderLog() {
     const sign = l.type === 'add' ? '+' : l.type === 'use' ? '−' : '=';
     const d    = new Date(l.ts);
     const date = isNaN(d) ? '' : d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+    const priceNote = l.newPrice ? ` · Price updated LKR ${fmt(l.newPrice)}` : '';
     return `<div class="log-item">
       <div class="log-top">
         <span class="log-name">${l.name}</span>
         <span class="${cls}">${sign}${l.qty} ${l.unit}</span>
       </div>
-      <span class="log-meta">${date} · ${l.before} → ${l.after}</span>
+      <span class="log-meta">${date} · ${l.before} → ${l.after}${priceNote}</span>
     </div>`;
   }).join('');
 }
 
-function doLog() {
-  const name   = document.getElementById('log-item').value;
-  const type   = document.getElementById('log-type').value;
-  const qty    = parseFloat(document.getElementById('log-qty').value);
-  if (!name || isNaN(qty) || qty < 0) { toast('Enter a valid quantity'); return; }
-  const item   = items.find(i => i.name === name);
+function filterLogItems() {
+  const q = document.getElementById('log-search').value.trim().toLowerCase();
+  const box = document.getElementById('log-suggestions');
+  if (!q) { box.style.display = 'none'; return; }
+  const matches = items.filter(i => i.name.toLowerCase().includes(q)).slice(0, 8);
+  if (!matches.length) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  box.innerHTML = matches.map(i =>
+    `<div class="suggest-item" onclick="selectLogItem('${i.name.replace(/'/g,"\\'")}')">
+      ${i.name}<span>${i.stock} ${i.unit} in stock</span>
+    </div>`
+  ).join('');
+}
+
+function showSuggestions() {
+  filterLogItems();
+}
+
+function selectLogItem(name) {
+  const item = items.find(i => i.name === name);
   if (!item) return;
+  selectedLogItem = item;
+  document.getElementById('log-search').value = name;
+  document.getElementById('log-suggestions').style.display = 'none';
+  document.getElementById('log-stock-display').style.display = '';
+  document.getElementById('log-cur-stock').textContent = item.stock;
+  document.getElementById('log-cur-unit').textContent = `${item.unit}  ·  Monthly usage: ${item.monthly} ${item.unit}  ·  Buffer: ${item.buffer} ${item.unit}`;
+  document.getElementById('log-price').value = item.price || '';
+  document.getElementById('log-qty').focus();
+}
+
+// Close suggestions when tapping outside
+document.addEventListener('click', e => {
+  const box = document.getElementById('log-suggestions');
+  if (box && !box.contains(e.target) && e.target.id !== 'log-search') {
+    box.style.display = 'none';
+  }
+});
+
+function doLog() {
+  if (!selectedLogItem) { toast('Search and select an item first'); return; }
+  const type  = document.getElementById('log-type').value;
+  const qty   = parseFloat(document.getElementById('log-qty').value);
+  const price = parseFloat(document.getElementById('log-price').value);
+  if (isNaN(qty) || qty < 0) { toast('Enter a valid quantity'); return; }
+
+  const item   = selectedLogItem;
   const before = item.stock;
   if (type === 'set') item.stock = qty;
   else if (type === 'add') item.stock = Math.round((item.stock + qty) * 10) / 10;
   else item.stock = Math.max(0, Math.round((item.stock - qty) * 10) / 10);
-  const entry = { ts: new Date().toISOString(), name, type, qty, before, after: item.stock, unit: item.unit };
+
+  // Update price if provided
+  let newPrice = null;
+  if (!isNaN(price) && price > 0 && price !== item.price) {
+    item.price = price;
+    newPrice = price;
+  }
+
+  const entry = { ts: new Date().toISOString(), name: item.name, type, qty, before, after: item.stock, unit: item.unit, newPrice };
   logs.push(entry);
   saveLocal();
+
+  // Reset form
+  document.getElementById('log-search').value = '';
   document.getElementById('log-qty').value = '';
+  document.getElementById('log-price').value = '';
+  document.getElementById('log-stock-display').style.display = 'none';
+  selectedLogItem = null;
+
   renderLog();
   renderStock();
-  toast('Stock updated');
+  toast('Stock updated ✓');
   if (apiUrl) {
     pushStockUpdate(item, type, qty, before);
     pushLog(entry);
